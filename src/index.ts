@@ -6,7 +6,7 @@ const PORT = process.env.PORT
 
 const server = http.createServer(async (req, res) => {
     // When UptimeRobot pings this path, run the scraper
-    if (req.method === 'GET' && req.url === '/trigger-scrape') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && req.url === '/trigger-scrape') {
         console.log("\nUptimeRobot triggered a scrape!");
         await checkForNewEvents();
         
