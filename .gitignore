@@ -1,23 +1,39 @@
-node_modules
+# Dependencies
+node_modules/
 
-
-
-.env
-.env.*.local
+# Build outputs
 dist/
 build/
 lib/
 *.tsbuildinfo
+
+# Environment variables and secrets
+.env
+.env.*.local
+
+# Database / Local State
+state.json
+
+# Logs
+*.log
 npm-debug.log*
 pnpm-debug.log*
 yarn-error.log*
-*.log
+
+# Testing and Cache
 .cache/
 coverage/
+
+# Editor / IDE specific
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS specific
 .DS_Store
 Thumbs.db
 desktop.ini
-.vscode/
-.idea/
-state.json
-
