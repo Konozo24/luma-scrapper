@@ -24,7 +24,21 @@ export async function checkForNewEvents() {
         if (calId) {
             const events = await scrapeCalendarAPI(calId);
 
-            allLiveEvents.push(...events);
+            const friendlyName = CALENDAR_NAMES[calId] || calId;
+
+            const labeledEvents = events.map(evt => {
+                // This pulls out the wrong "Personal" name the API gave us
+                const { id, lumaUrl, target_profile, ...rest } = evt as any;
+
+                return {
+                    id: rest.id,
+                    target_profile: friendlyName,
+                    lumaUrl: rest.lumaUrl,     
+                    ...rest                
+                };
+            });
+
+            allLiveEvents.push(...labeledEvents);
         }
 
         await new Promise(res => setTimeout(res, 1000)); // Polite delay
