@@ -3,24 +3,40 @@ import { getKnownEvents, insertNewEvents } from './service/storage';
 import { ApifyLumaEvent } from './type';
 // import { sendWhatsAppAlert } from './services/whatsapp'; // Import this when you add the WhatsApp logic
 
+const CALENDAR_NAMES: Record<string, string> = {
+    'cal-DqBTiRhIzzmBhcU': 'AI.SEA',
+    'cal-DjCdUOevQOyB5OS': 'AI Hackerdom',
+    'cal-HRPtK7hDvVSLaNu': 'Nyala Labs',
+    'cal-AQNeOLktkou1BBv': 'Testing'
+};
+
 export async function checkForNewEvents() {
 
     const TARGET_CALENDARS = process.env.TARGET_CALENDARS!.split(',');
-    
+
     let allLiveEvents: ApifyLumaEvent[] = [];
 
     for (const target of TARGET_CALENDARS) {
         // Automatically find the cal_id from the URL
         const calId = await getCalendarIdFromUrl(target.trim());
-        
+
+
         if (calId) {
             const events = await scrapeCalendarAPI(calId);
-            allLiveEvents.push(...events);
+
+            const friendlyName = CALENDAR_NAMES[calId] || "";
+
+            const labeledEvents = events.map(evt => ({
+                ...evt,
+                target_calendar: friendlyName
+            }));
+
+            allLiveEvents.push(...labeledEvents);
         }
-        
+
         await new Promise(res => setTimeout(res, 1000)); // Polite delay
     }
-    
+
     if (allLiveEvents.length === 0) return;
 
     const knownEvents = await getKnownEvents();
