@@ -31,9 +31,9 @@ export async function checkForNewEvents() {
                 const { id, lumaUrl, target_profile, ...rest } = evt as any;
 
                 return {
-                    id: rest.id,
+                    id: id,
                     target_profile: friendlyName,
-                    lumaUrl: rest.lumaUrl,     
+                    lumaUrl: lumaUrl,     
                     ...rest                
                 };
             });
