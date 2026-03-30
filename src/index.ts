@@ -1,6 +1,7 @@
+import 'dotenv/config';
 import { checkForNewEvents } from './monitor';
 import http from 'http';
-import 'dotenv/config';
+
 
 const PORT = process.env.PORT
 
