@@ -26,6 +26,7 @@ export function mapLumaDataToApify(entry: any): ApifyLumaEvent {
     
     return {
         id: evt.api_id,
+        target_profile: cal?.name,
         lumaUrl: formatLumaUrl(evt.url),
         category: null, 
         name: evt.name,

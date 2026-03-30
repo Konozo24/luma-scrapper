@@ -30,7 +30,7 @@ export interface Host {
 
 export interface ApifyLumaEvent {
     id: string;
-    target_calendar: string;
+    target_profile: string;
     lumaUrl: string;
     category: string | null;
     name: string;
