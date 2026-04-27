@@ -13,11 +13,20 @@
   "packageManager": "pnpm@10.32.1",
   "devDependencies": {
     "@types/node": "^25.5.0",
+    "@types/pino": "^7.0.5",
+    "@types/qrcode": "^1.5.6",
+    "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },
   "dependencies": {
+    "@cacheable/node-cache": "^3.0.0",
+    "@hapi/boom": "^10.0.1",
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
+    "baileys": "7.0.0-rc.9",
     "dotenv": "^17.3.1",
-    "mongodb": "^7.1.1"
+    "mongodb": "^7.1.1",
+    "pino": "^10.3.1",
+    "qrcode": "^1.5.4"
   }
 }
