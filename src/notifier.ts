@@ -1,10 +1,10 @@
 import {
   makeWASocket,
-  useMultiFileAuthState,
   fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
 import { MongoClient, WithId } from "mongodb";
 import { ApifyLumaEvent } from "./type";
+import { AuthDoc, useMongoDBAuthState } from "./util/useMongoDBAuthState";
 import pino from "pino";
 import * as dotenv from "dotenv";
 import * as qrcode from "qrcode-terminal";
@@ -15,11 +15,12 @@ const MONGO_URI = process.env.MONGODB_URI as string;
 const GROUP_JID = process.env.GROUP_JID as string;
 const DB_NAME = process.env.DB_NAME as string;
 const COLLECTION_NAME = process.env.COLLECTION_NAME as string;
+const AUTH_COLLECTION_NAME = process.env.AUTH_COLLECTION_NAME as string;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const randomDelay = (min: number, max: number) =>
   delay(Math.floor(Math.random() * (max - min + 1) + min));
-  
+
 async function fetchLatestEvent(): Promise<WithId<ApifyLumaEvent> | null> {
   const client = new MongoClient(MONGO_URI);
   try {
@@ -105,7 +106,12 @@ export function createSummaryMessage(
 }
 
 async function connectWhatsApp() {
-  const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
+  const authClient = new MongoClient(MONGO_URI);
+  await authClient.connect();
+  const authCollection = authClient
+    .db(DB_NAME)
+    .collection<AuthDoc>(AUTH_COLLECTION_NAME);
+  const { state, saveCreds } = await useMongoDBAuthState(authCollection);
   const { version, isLatest } = await fetchLatestBaileysVersion();
   console.log(
     `Using WhatsApp Web v${version.join(".")}, isLatest: ${isLatest}`,
@@ -156,16 +162,22 @@ async function connectWhatsApp() {
     sock.ev.on("connection.update", onUpdate);
   });
 
-  return sock;
+  return { sock, authClient };
 }
 
 async function closeWhatsApp(
-  sock: Awaited<ReturnType<typeof connectWhatsApp>>,
+  connection: Awaited<ReturnType<typeof connectWhatsApp>>,
 ): Promise<void> {
+  const { sock, authClient } = connection;
   try {
     sock.end(undefined);
   } catch {
     // ignore socket close issues
+  }
+  try {
+    await authClient.close();
+  } catch {
+    // ignore mongo close issues
   }
 }
 
@@ -181,7 +193,8 @@ export async function sendEventSummaries(
 ): Promise<{ sent: number; failed: number }> {
   if (events.length === 0) return { sent: 0, failed: 0 };
 
-  const sock = await connectWhatsApp();
+  const connection = await connectWhatsApp();
+  const { sock } = connection;
   let sent = 0;
   let failed = 0;
 
@@ -214,7 +227,7 @@ export async function sendEventSummaries(
 
     await delay(3000);
   } finally {
-    await closeWhatsApp(sock);
+    await closeWhatsApp(connection);
   }
 
   return { sent, failed };
