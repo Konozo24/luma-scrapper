@@ -23,6 +23,4 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
     console.log(`Web Service awake and listening on port ${PORT}`);
-    // Run once immediately on startup
-    checkForNewEvents(); 
 });
