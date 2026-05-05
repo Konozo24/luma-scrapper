@@ -1,4 +1,8 @@
-import { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
+import {
+  makeWASocket,
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+} from "@whiskeysockets/baileys";
 import { MongoClient, WithId } from "mongodb";
 import { ApifyLumaEvent } from "./type";
 import pino from "pino";
@@ -12,6 +16,10 @@ const GROUP_JID = process.env.GROUP_JID as string;
 const DB_NAME = process.env.DB_NAME as string;
 const COLLECTION_NAME = process.env.COLLECTION_NAME as string;
 
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const randomDelay = (min: number, max: number) =>
+  delay(Math.floor(Math.random() * (max - min + 1) + min));
+  
 async function fetchLatestEvent(): Promise<WithId<ApifyLumaEvent> | null> {
   const client = new MongoClient(MONGO_URI);
   try {
@@ -46,7 +54,9 @@ function formatEventDate(startAt: string | null, timezone: string): string {
   return `${weekdayMonthDay} · ${timePart} (${timezone})`;
 }
 
-function buildGoogleMapsLink(event: WithId<ApifyLumaEvent> | ApifyLumaEvent): string | null {
+function buildGoogleMapsLink(
+  event: WithId<ApifyLumaEvent> | ApifyLumaEvent,
+): string | null {
   const location = event.location;
   if (!location) return null;
 
@@ -62,13 +72,17 @@ function buildGoogleMapsLink(event: WithId<ApifyLumaEvent> | ApifyLumaEvent): st
   return `https://maps.google.com/?q=${encodeURIComponent(query)}`;
 }
 
-export function createSummaryMessage(event: WithId<ApifyLumaEvent> | ApifyLumaEvent | null): string | null {
+export function createSummaryMessage(
+  event: WithId<ApifyLumaEvent> | ApifyLumaEvent | null,
+): string | null {
   if (!event) return null;
 
   const title = event.name || "Untitled Event";
   const timezone = event.timezone || "Asia/Kuala_Lumpur";
-  const hostName = event.organizer?.name?.trim() || event.target_profile || "Unknown Host";
-  const locationName = event.location?.fullAddress || event.location?.city || "Online";
+  const hostName =
+    event.organizer?.name?.trim() || event.target_profile || "Unknown Host";
+  const locationName =
+    event.location?.fullAddress || event.location?.city || "Online";
   const registerLink = event.eventUrl || "Link not available";
   const mapsLink = buildGoogleMapsLink(event);
 
@@ -93,7 +107,9 @@ export function createSummaryMessage(event: WithId<ApifyLumaEvent> | ApifyLumaEv
 async function connectWhatsApp() {
   const { state, saveCreds } = await useMultiFileAuthState("auth_info_baileys");
   const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`Using WhatsApp Web v${version.join(".")}, isLatest: ${isLatest}`);
+  console.log(
+    `Using WhatsApp Web v${version.join(".")}, isLatest: ${isLatest}`,
+  );
 
   const sock = makeWASocket({
     version,
@@ -108,9 +124,14 @@ async function connectWhatsApp() {
     if (!msg) return;
     if (m.type === "notify" && !msg.key.fromMe) {
       const incomingJid = msg.key.remoteJid;
-      const messageContent = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+      const messageContent =
+        msg.message?.conversation ||
+        msg.message?.extendedTextMessage?.text ||
+        "";
       if (messageContent === "!getId" && incomingJid) {
-        await sock.sendMessage(incomingJid, { text: `The JID for this chat is:\n\n*${incomingJid}*` });
+        await sock.sendMessage(incomingJid, {
+          text: `The JID for this chat is:\n\n*${incomingJid}*`,
+        });
       }
     }
   });
@@ -127,7 +148,9 @@ async function connectWhatsApp() {
         resolve();
       } else if (connection === "close") {
         sock.ev.off("connection.update", onUpdate);
-        reject(lastDisconnect?.error || new Error("Connection closed before open"));
+        reject(
+          lastDisconnect?.error || new Error("Connection closed before open"),
+        );
       }
     };
     sock.ev.on("connection.update", onUpdate);
@@ -136,7 +159,9 @@ async function connectWhatsApp() {
   return sock;
 }
 
-async function closeWhatsApp(sock: Awaited<ReturnType<typeof connectWhatsApp>>): Promise<void> {
+async function closeWhatsApp(
+  sock: Awaited<ReturnType<typeof connectWhatsApp>>,
+): Promise<void> {
   try {
     sock.end(undefined);
   } catch {
@@ -151,7 +176,9 @@ export async function sendEventSummary(event: ApifyLumaEvent): Promise<void> {
   }
 }
 
-export async function sendEventSummaries(events: ApifyLumaEvent[]): Promise<{ sent: number; failed: number }> {
+export async function sendEventSummaries(
+  events: ApifyLumaEvent[],
+): Promise<{ sent: number; failed: number }> {
   if (events.length === 0) return { sent: 0, failed: 0 };
 
   const sock = await connectWhatsApp();
@@ -164,13 +191,28 @@ export async function sendEventSummaries(events: ApifyLumaEvent[]): Promise<{ se
       if (!messageText) continue;
 
       try {
+        // appear as "typing"
+        await sock.sendPresenceUpdate("composing", GROUP_JID);
+
+        await randomDelay(2000, 4000);
+
+        // stop typing
+        await sock.sendPresenceUpdate("paused", GROUP_JID);
+
         await sock.sendMessage(GROUP_JID, { text: messageText });
         sent += 1;
+
+        // if there is more events, wait a few second before sending
+        if (events.indexOf(event) < events.length - 1) {
+          await randomDelay(3000, 7000); // Wait 3-7 seconds between messages
+        }
       } catch (error) {
         failed += 1;
         console.error(`Failed sending event "${event.name}"`, error);
       }
     }
+
+    await delay(3000);
   } finally {
     await closeWhatsApp(sock);
   }

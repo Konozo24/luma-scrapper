@@ -1,4 +1,5 @@
 import { ApifyLumaEvent } from "../type";
+import { buildGdgDedupKey, buildLumaDedupKey } from "./dedup";
 
 export function formatLumaUrl(urlPath: string): string {
   if (!urlPath) return "";
@@ -36,6 +37,7 @@ export function mapLumaDataToApify(entry: any): ApifyLumaEvent {
 
   return {
     id: evt.api_id,
+    dedupKey: buildLumaDedupKey(evt.api_id),
     target_profile: cal?.name,
     eventUrl: formatLumaUrl(evt.url),
     category: null,
@@ -127,6 +129,10 @@ export function mapGdgDataToApify(
 ): ApifyLumaEvent {
   return {
     id: `gdg-${entry.id}`,
+    dedupKey: buildGdgDedupKey({
+      eventUrl: entry.static_url || entry.url || null,
+      id: entry.id,
+    }),
     target_profile: friendlyName,
     eventUrl: entry.static_url || entry.url || null,
 
