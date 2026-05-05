@@ -31,9 +31,7 @@ export async function scrapeGdgAPI(
       return [];
     }
 
-    // Using the event_slim endpoint you found (Live status)
     const apiUrl = `https://gdg.community.dev/api/event_slim/for_chapter/${chapterId}/?status=Live&order=start_date`;
-
     const apiRes = await fetch(apiUrl, {
       headers: { Accept: "application/json" },
     });
@@ -41,12 +39,7 @@ export async function scrapeGdgAPI(
     if (!apiRes.ok) throw new Error(`HTTP ${apiRes.status}`);
 
     const apiData = await apiRes.json();
-    // The event_slim endpoint returns a results array
     const results = apiData.results || [];
-
-    console.log(
-      `✅ Successfully fetched ${results.length} live events from GDG.`,
-    );
     return results.map((entry: any) => mapGdgDataToApify(entry, friendlyName));
   } catch (error) {
     console.error(`❌ Failed to scrape GDG ${friendlyName}:`, error);
