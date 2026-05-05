@@ -16,6 +16,10 @@ const GROUP_JID = process.env.GROUP_JID as string;
 const DB_NAME = process.env.DB_NAME as string;
 const COLLECTION_NAME = process.env.COLLECTION_NAME as string;
 const AUTH_COLLECTION_NAME = process.env.AUTH_COLLECTION_NAME as string;
+let sharedAuthClient: MongoClient | null = null;
+let sharedAuthStatePromise:
+  | Promise<Awaited<ReturnType<typeof useMongoDBAuthState>>>
+  | null = null;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const randomDelay = (min: number, max: number) =>
@@ -27,7 +31,8 @@ async function fetchLatestEvent(): Promise<WithId<ApifyLumaEvent> | null> {
     await client.connect();
     const db = client.db(DB_NAME);
     const collection = db.collection<ApifyLumaEvent>(COLLECTION_NAME);
-    return collection.findOne({}, { sort: { _id: -1 } });
+    const latestEvent = await collection.findOne({}, { sort: { _id: -1 } });
+    return latestEvent;
   } finally {
     await client.close();
   }
@@ -106,78 +111,109 @@ export function createSummaryMessage(
 }
 
 async function connectWhatsApp() {
-  const authClient = new MongoClient(MONGO_URI);
-  await authClient.connect();
-  const authCollection = authClient
-    .db(DB_NAME)
-    .collection<AuthDoc>(AUTH_COLLECTION_NAME);
-  const { state, saveCreds } = await useMongoDBAuthState(authCollection);
+  if (!sharedAuthClient) {
+    sharedAuthClient = new MongoClient(MONGO_URI);
+    await sharedAuthClient.connect();
+  }
+
+  if (!sharedAuthStatePromise) {
+    const authCollection = sharedAuthClient
+      .db(DB_NAME)
+      .collection<AuthDoc>(AUTH_COLLECTION_NAME);
+    sharedAuthStatePromise = useMongoDBAuthState(authCollection);
+  }
+
+  const { state, saveCreds } = await sharedAuthStatePromise;
   const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(
-    `Using WhatsApp Web v${version.join(".")}, isLatest: ${isLatest}`,
-  );
+  console.log(`Using WhatsApp Web v${version.join(".")}, isLatest: ${isLatest}`);
 
-  const sock = makeWASocket({
-    version,
-    auth: state,
-    logger: pino({ level: "info" }) as any,
-    browser: ["Windows", "Chrome", "20.0.04"],
-  });
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const sock = makeWASocket({
+      version,
+      auth: state,
+      logger: pino({ level: "info" }) as any,
+      browser: ["Windows", "Chrome", "20.0.04"],
+    });
 
-  sock.ev.on("creds.update", saveCreds);
-  sock.ev.on("messages.upsert", async (m) => {
-    const msg = m.messages[0];
-    if (!msg) return;
-    if (m.type === "notify" && !msg.key.fromMe) {
-      const incomingJid = msg.key.remoteJid;
-      const messageContent =
-        msg.message?.conversation ||
-        msg.message?.extendedTextMessage?.text ||
-        "";
-      if (messageContent === "!getId" && incomingJid) {
-        await sock.sendMessage(incomingJid, {
-          text: `The JID for this chat is:\n\n*${incomingJid}*`,
-        });
-      }
-    }
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    const onUpdate = (update: any) => {
-      const { connection, lastDisconnect, qr } = update;
-      if (qr) {
-        qrcode.generate(qr, { small: true });
-        console.log("Scan the QR code above with WhatsApp!");
-      }
-      if (connection === "open") {
-        sock.ev.off("connection.update", onUpdate);
-        resolve();
-      } else if (connection === "close") {
-        sock.ev.off("connection.update", onUpdate);
-        reject(
-          lastDisconnect?.error || new Error("Connection closed before open"),
-        );
+    let isClosing = false;
+    const safeSaveCreds = async () => {
+      if (isClosing) return;
+      try {
+        await saveCreds();
+      } catch (error) {
+        console.error("Failed to persist WhatsApp creds:", error);
       }
     };
-    sock.ev.on("connection.update", onUpdate);
-  });
 
-  return { sock, authClient };
+    sock.ev.on("creds.update", safeSaveCreds);
+    sock.ev.on("messages.upsert", async (m) => {
+      const msg = m.messages[0];
+      if (!msg) return;
+      if (m.type === "notify" && !msg.key.fromMe) {
+        const incomingJid = msg.key.remoteJid;
+        const messageContent =
+          msg.message?.conversation ||
+          msg.message?.extendedTextMessage?.text ||
+          "";
+        if (messageContent === "!getId" && incomingJid) {
+          await sock.sendMessage(incomingJid, {
+            text: `The JID for this chat is:\n\n*${incomingJid}*`,
+          });
+        }
+      }
+    });
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onUpdate = (update: any) => {
+          const { connection, lastDisconnect, qr } = update;
+          if (qr) {
+            qrcode.generate(qr, { small: true });
+            console.log("Scan the QR code above with WhatsApp!");
+          }
+          if (connection === "open") {
+            sock.ev.off("connection.update", onUpdate);
+            resolve();
+          } else if (connection === "close") {
+            sock.ev.off("connection.update", onUpdate);
+            reject(lastDisconnect?.error || new Error("Connection closed before open"));
+          }
+        };
+        sock.ev.on("connection.update", onUpdate);
+      });
+
+      return { sock, safeSaveCreds, setClosing: () => (isClosing = true) };
+    } catch (error: any) {
+      const statusCode = error?.output?.statusCode || error?.data?.attrs?.code;
+      const shouldRetry = String(statusCode) === "515" && attempt < 3;
+      sock.ev.off("creds.update", safeSaveCreds);
+      try {
+        sock.end(undefined);
+      } catch {
+        // ignore close issues
+      }
+      if (shouldRetry) {
+        console.log("WhatsApp requested restart (515). Retrying...");
+        await delay(1500);
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error("Unable to connect WhatsApp after retries.");
 }
 
 async function closeWhatsApp(
   connection: Awaited<ReturnType<typeof connectWhatsApp>>,
 ): Promise<void> {
-  const { sock, authClient } = connection;
+  const { sock, safeSaveCreds, setClosing } = connection;
+  setClosing();
+  sock.ev.off("creds.update", safeSaveCreds);
   try {
     sock.end(undefined);
   } catch {
     // ignore socket close issues
-  }
-  try {
-    await authClient.close();
-  } catch {
-    // ignore mongo close issues
   }
 }
 
@@ -235,7 +271,6 @@ export async function sendEventSummaries(
 
 async function startWhatsAppAndSendLatest() {
   const event = await fetchLatestEvent();
-  console.log("\nRAW EVENT FROM DATABASE:", event, "\n");
 
   if (!event) {
     console.log("No events found in MongoDB.");
