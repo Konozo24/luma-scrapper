@@ -30,9 +30,6 @@ export async function useMongoDBAuthState(
   collection: Collection<AuthDoc>,
 ): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
   const credsDoc = await collection.findOne({ _id: CREDS_ID });
-  console.log(
-    `[WA AUTH DEBUG] useMongoDBAuthState collection=${collection.collectionName}, credsFound=${Boolean(credsDoc)}`,
-  );
   const creds: AuthenticationCreds = credsDoc
     ? deserialize<AuthenticationCreds>(credsDoc.value)
     : initAuthCreds();
@@ -109,9 +106,6 @@ export async function useMongoDBAuthState(
           }
 
           if (ops.length) {
-            console.log(
-              `[WA AUTH DEBUG] keys.set writing ${ops.length} ops to ${collection.collectionName}`,
-            );
             await collection.bulkWrite(ops, { ordered: false });
           }
         },
@@ -119,9 +113,6 @@ export async function useMongoDBAuthState(
     },
     saveCreds: async () => {
       await writeValue(CREDS_ID, creds);
-      console.log(
-        `[WA AUTH DEBUG] saveCreds persisted in ${collection.collectionName} at ${new Date().toISOString()}`,
-      );
     },
   };
 }

@@ -22,10 +22,10 @@ const DB_NAME = normalizeEnv(process.env.DB_NAME);
 const COLLECTION_NAME = normalizeEnv(process.env.COLLECTION_NAME);
 const AUTH_COLLECTION_NAME = normalizeEnv(process.env.AUTH_COLLECTION_NAME) || "whatsapp_auth";
 if (!MONGO_URI) {
-  throw new Error("[WA AUTH DEBUG] Missing MONGODB_URI after normalization.");
+  throw new Error("Missing MONGODB_URI after normalization.");
 }
 if (!DB_NAME) {
-  throw new Error("[WA AUTH DEBUG] Missing DB_NAME after normalization.");
+  throw new Error("Missing DB_NAME after normalization.");
 }
 const SENT_NOTIFICATIONS_COLLECTION = "sent_notifications";
 const NOTIFIER_ATTEMPTS_COLLECTION = "notifier_attempts";
@@ -40,7 +40,6 @@ let sharedAuthClient: MongoClient | null = null;
 let sharedAuthStatePromise:
   | Promise<Awaited<ReturnType<typeof useMongoDBAuthState>>>
   | null = null;
-let authTargetLogged = false;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const randomDelay = (min: number, max: number) =>
@@ -261,31 +260,10 @@ async function connectWhatsApp() {
     await sharedAuthClient.connect();
   }
 
-  if (!authTargetLogged) {
-    let mongoHost = "unknown";
-    try {
-      mongoHost = new URL(MONGO_URI).host;
-    } catch {
-      mongoHost = "invalid-uri";
-    }
-    console.log(`[WA AUTH DEBUG] Mongo host: ${mongoHost}`);
-    console.log(`[WA AUTH DEBUG] DB_NAME: ${DB_NAME}`);
-    console.log(`[WA AUTH DEBUG] AUTH_COLLECTION_NAME: ${AUTH_COLLECTION_NAME}`);
-    authTargetLogged = true;
-  }
-
   if (!sharedAuthStatePromise) {
     const authCollection = sharedAuthClient
       .db(DB_NAME)
       .collection<AuthDoc>(AUTH_COLLECTION_NAME);
-    const [totalDocs, credsDoc, keyDocs] = await Promise.all([
-      authCollection.countDocuments({}),
-      authCollection.findOne({ _id: "creds" }),
-      authCollection.countDocuments({ _id: { $regex: "^key:" } }),
-    ]);
-    console.log(
-      `[WA AUTH DEBUG] Auth collection docs total=${totalDocs}, credsExists=${Boolean(credsDoc)}, keyDocs=${keyDocs}`,
-    );
     sharedAuthStatePromise = useMongoDBAuthState(authCollection);
   }
 
@@ -349,7 +327,6 @@ async function connectWhatsApp() {
       });
 
       await safeSaveCreds();
-      console.log("[WA AUTH DEBUG] Forced saveCreds checkpoint after successful connect.");
 
       return { sock, safeSaveCreds, setClosing: () => (isClosing = true) };
     } catch (error: any) {
@@ -362,7 +339,7 @@ async function connectWhatsApp() {
         // ignore close issues
       }
       if (shouldRetry) {
-        console.log("[WA AUTH DEBUG] 515 restart-required received after pairing/connect. Retrying...");
+        console.log("WhatsApp requested restart (515). Retrying...");
         await delay(1500);
         continue;
       }
