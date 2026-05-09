@@ -26,6 +26,7 @@
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "baileys": "7.0.0-rc.9",
     "dotenv": "^17.3.1",
+    "link-preview-js": "^4.0.1",
     "mongodb": "^7.1.1",
     "pino": "^10.3.1",
     "qrcode": "^1.5.4",
