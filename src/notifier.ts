@@ -20,7 +20,8 @@ const MONGO_URI = normalizeEnv(process.env.MONGODB_URI);
 const GROUP_JID = normalizeEnv(process.env.GROUP_JID);
 const DB_NAME = normalizeEnv(process.env.DB_NAME);
 const COLLECTION_NAME = normalizeEnv(process.env.COLLECTION_NAME);
-const AUTH_COLLECTION_NAME = normalizeEnv(process.env.AUTH_COLLECTION_NAME) || "whatsapp_auth";
+const AUTH_COLLECTION_NAME =
+  normalizeEnv(process.env.AUTH_COLLECTION_NAME) || "whatsapp_auth";
 if (!MONGO_URI) {
   throw new Error("Missing MONGODB_URI after normalization.");
 }
@@ -37,9 +38,9 @@ const DEDUP_WINDOW_HOURS = 24;
 const FAILURE_WINDOW_SIZE = 20;
 const FAILURE_RATIO_THRESHOLD = 0.2;
 let sharedAuthClient: MongoClient | null = null;
-let sharedAuthStatePromise:
-  | Promise<Awaited<ReturnType<typeof useMongoDBAuthState>>>
-  | null = null;
+let sharedAuthStatePromise: Promise<
+  Awaited<ReturnType<typeof useMongoDBAuthState>>
+> | null = null;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const randomDelay = (min: number, max: number) =>
@@ -130,7 +131,10 @@ async function shouldPauseFromFailureRate(): Promise<boolean> {
   return ratio > FAILURE_RATIO_THRESHOLD;
 }
 
-async function enqueuePending(event: ApifyLumaEvent, reason: string): Promise<void> {
+async function enqueuePending(
+  event: ApifyLumaEvent,
+  reason: string,
+): Promise<void> {
   const collection = await getPendingNotificationsCollection();
   await collection.updateOne(
     { dedupKey: event.dedupKey, groupJid: GROUP_JID },
@@ -269,7 +273,9 @@ async function connectWhatsApp() {
 
   const { state, saveCreds } = await sharedAuthStatePromise;
   const { version, isLatest } = await fetchLatestBaileysVersion();
-  console.log(`Using WhatsApp Web v${version.join(".")}, isLatest: ${isLatest}`);
+  console.log(
+    `Using WhatsApp Web v${version.join(".")}, isLatest: ${isLatest}`,
+  );
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     const sock = makeWASocket({
@@ -320,7 +326,10 @@ async function connectWhatsApp() {
             resolve();
           } else if (connection === "close") {
             sock.ev.off("connection.update", onUpdate);
-            reject(lastDisconnect?.error || new Error("Connection closed before open"));
+            reject(
+              lastDisconnect?.error ||
+                new Error("Connection closed before open"),
+            );
           }
         };
         sock.ev.on("connection.update", onUpdate);
@@ -476,7 +485,11 @@ export async function sendEventSummaries(
       } catch (error) {
         await enqueuePending(event, "send_failed");
         failed += 1;
-        await recordAttempt(event, "failed", (error as Error)?.message || "send_error");
+        await recordAttempt(
+          event,
+          "failed",
+          (error as Error)?.message || "send_error",
+        );
         console.error(`Failed sending event "${event.name}"`, error);
       }
     }
