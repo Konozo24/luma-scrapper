@@ -249,7 +249,7 @@ export function createSummaryMessage(
   }
 
   lines.push("");
-  lines.push(`🔗 Register: ${registerLink}`);
+  lines.push(`🔗 Register Here: ${registerLink}`);
 
   return lines.join("\n");
 }
