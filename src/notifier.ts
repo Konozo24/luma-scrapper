@@ -226,7 +226,7 @@ export function createSummaryMessage(
     "",
     `*Host:* ${hostName}`,
     `*When:* ${formatEventDate(event.startAt, timezone)}`,
-    `📍*Where:* ${locationName}`,
+    `*Where:* ${locationName}`,
   ];
 
   lines.push("");
