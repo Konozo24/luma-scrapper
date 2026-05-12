@@ -1,4 +1,4 @@
-import {
+﻿import {
   makeWASocket,
   fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
@@ -205,25 +205,7 @@ function formatEventDate(startAt: string | null, timezone: string): string {
     hour12: true,
   });
 
-  return `${weekdayMonthDay} · ${timePart} (${timezone})`;
-}
-
-function buildGoogleMapsLink(
-  event: WithId<ApifyLumaEvent> | ApifyLumaEvent,
-): string | null {
-  const location = event.location;
-  if (!location) return null;
-
-  if ((location.locationType || "").toLowerCase() === "online") return null;
-
-  if (location.latitude != null && location.longitude != null) {
-    return `https://maps.google.com/?q=${location.latitude},${location.longitude}`;
-  }
-
-  const query = location.fullAddress || location.city;
-  if (!query) return null;
-
-  return `https://maps.google.com/?q=${encodeURIComponent(query)}`;
+  return `${weekdayMonthDay} • ${timePart} (${timezone})`;
 }
 
 export function createSummaryMessage(
@@ -238,22 +220,17 @@ export function createSummaryMessage(
   const locationName =
     event.location?.fullAddress || event.location?.city || "Online";
   const registerLink = event.eventUrl || "Link not available";
-  const mapsLink = buildGoogleMapsLink(event);
 
   const lines = [
-    `Event: ${title}`,
+    `*${title}*`,
     "",
-    `Host: ${hostName}`,
-    `When: ${formatEventDate(event.startAt, timezone)}`,
-    `Where: ${locationName}`,
+    `*Host:* ${hostName}`,
+    `*When:* ${formatEventDate(event.startAt, timezone)}`,
+    `📍*Where:* ${locationName}`,
   ];
 
-  if (mapsLink) {
-    lines.push(`📍 ${mapsLink}`);
-  }
-
   lines.push("");
-  lines.push(`🔗 Register Here: ${registerLink}`);
+  lines.push(`🔗 *Register Here:* ${registerLink}`);
 
   return lines.join("\n");
 }
