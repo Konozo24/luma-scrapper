@@ -30,6 +30,20 @@ export function formatSocialHandles(obj: any) {
   };
 }
 
+function normalizeLumaLocationType(locationType: unknown): string {
+  const value = String(locationType || "").toLowerCase();
+  if (value === "meet" || value === "online" || value === "virtual") {
+    return "online";
+  }
+  if (value === "hybrid") {
+    return "hybrid";
+  }
+  if (value === "offline" || value === "venue" || value === "in_person") {
+    return "offline";
+  }
+  return "unknown";
+}
+
 export function mapLumaDataToApify(entry: any): ApifyLumaEvent {
   const evt = entry.event;
   const tix = entry.ticket_info;
@@ -50,7 +64,7 @@ export function mapLumaDataToApify(entry: any): ApifyLumaEvent {
     timezone: evt.timezone || null,
 
     location: {
-      locationType: evt.location_type || "offline",
+      locationType: normalizeLumaLocationType(evt.location_type),
       fullAddress: evt.geo_address_info?.full_address || null,
       address: evt.geo_address_info?.address || null,
       city: evt.geo_address_info?.city || null,
@@ -127,6 +141,14 @@ export function mapGdgDataToApify(
   entry: any,
   friendlyName: string,
 ): ApifyLumaEvent {
+  const audienceType = String(entry.audience_type || "").toUpperCase();
+  const gdgLocationType =
+    audienceType === "VIRTUAL"
+      ? "online"
+      : audienceType === "HYBRID"
+        ? "hybrid"
+        : "offline";
+
   return {
     id: `gdg-${entry.id}`,
     dedupKey: buildGdgDedupKey({
@@ -148,7 +170,7 @@ export function mapGdgDataToApify(
     timezone: entry.event_timezone || "UTC",
 
     location: {
-      locationType: entry.is_virtual_event ? "online" : "offline",
+      locationType: gdgLocationType,
       fullAddress: null,
       address: null,
       city: null,

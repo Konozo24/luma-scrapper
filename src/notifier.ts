@@ -217,8 +217,17 @@ export function createSummaryMessage(
   const timezone = event.timezone || "Asia/Kuala_Lumpur";
   const hostName =
     event.organizer?.name?.trim() || event.target_profile || "Unknown Host";
+  const locationType = (event.location?.locationType || "").toLowerCase();
   const locationName =
-    event.location?.fullAddress || event.location?.city || "Online";
+    event.location?.fullAddress ||
+    event.location?.city ||
+    (locationType === "online"
+      ? "Online"
+      : locationType === "hybrid"
+        ? "Hybrid"
+        : locationType === "offline"
+          ? "Venue TBA"
+          : null);
   const registerLink = event.eventUrl || "Link not available";
 
   const lines = [
@@ -226,8 +235,11 @@ export function createSummaryMessage(
     "",
     `*Host:* ${hostName}`,
     `*When:* ${formatEventDate(event.startAt, timezone)}`,
-    `*Where:* ${locationName}`,
   ];
+
+  if (locationName) {
+    lines.push(`*Where:* ${locationName}`);
+  }
 
   lines.push("");
   lines.push(`🔗 *Register Here:* ${registerLink}`);
