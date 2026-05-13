@@ -39,7 +39,26 @@ export async function scrapeGdgAPI(
       return [];
     }
 
-    const apiUrl = `https://gdg.community.dev/api/event_slim/for_chapter/${chapterId}/?status=Live&order=start_date`;
+    const fields = [
+      "id",
+      "title",
+      "start_date",
+      "end_date",
+      "event_timezone",
+      "audience_type",
+      "join_virtual_event_url",
+      "custom_tickets_url",
+      "description_short",
+      "is_hidden",
+      "registration_required",
+      "static_url",
+      "url",
+      "cropped_banner_url",
+      "banner",
+      "cropped_picture_url",
+      "picture",
+    ].join(",");
+    const apiUrl = `https://gdg.community.dev/api/event_slim/for_chapter/${chapterId}/?status=Live&order=start_date&fields=${encodeURIComponent(fields)}`;
     const apiRes = await fetch(apiUrl, {
       headers: { Accept: "application/json" },
     });
