@@ -187,25 +187,59 @@ async function fetchLatestEvent(): Promise<WithId<ApifyLumaEvent> | null> {
 }
 
 function formatEventDate(startAt: string | null, timezone: string): string {
-  if (!startAt) return `TBA (${timezone})`;
+  const fallbackTz = "UTC";
+  const safeTimezone = timezone || fallbackTz;
+
+  if (!startAt) return `TBA (${getGmtOffsetLabel(new Date(), safeTimezone)})`;
 
   const dateObj = new Date(startAt);
-  if (Number.isNaN(dateObj.getTime())) return `TBA (${timezone})`;
+  if (Number.isNaN(dateObj.getTime())) {
+    return `TBA (${getGmtOffsetLabel(new Date(), safeTimezone)})`;
+  }
 
   const weekdayMonthDay = dateObj.toLocaleString("en-US", {
-    timeZone: timezone,
-    weekday: "short",
+    timeZone: safeTimezone,
+    weekday: "long",
     month: "short",
     day: "numeric",
   });
   const timePart = dateObj.toLocaleString("en-US", {
-    timeZone: timezone,
+    timeZone: safeTimezone,
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
   });
+  const gmtOffset = getGmtOffsetLabel(dateObj, safeTimezone);
 
-  return `${weekdayMonthDay} • ${timePart} (${timezone})`;
+  return `${weekdayMonthDay} • ${timePart} (${gmtOffset})`;
+}
+
+function getGmtOffsetLabel(dateObj: Date, timezone: string): string {
+  try {
+    const tzPart = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      timeZoneName: "shortOffset",
+    })
+      .formatToParts(dateObj)
+      .find((part) => part.type === "timeZoneName")?.value;
+
+    if (!tzPart) return "GMT+0";
+
+    const normalized = tzPart.replace(/\s+/g, "");
+    if (normalized === "GMT" || normalized === "UTC") return "GMT+0";
+
+    const match = normalized.match(/^(?:GMT|UTC)([+-]\d{1,2})(?::?(\d{2}))?$/i);
+    if (!match) return normalized.startsWith("GMT") ? normalized : `GMT+0`;
+
+    const hour = Number(match[1]);
+    const minute = Number(match[2] || "0");
+    const sign = hour >= 0 ? "+" : "-";
+    const absHour = Math.abs(hour);
+    if (minute === 0) return `GMT${sign}${absHour}`;
+    return `GMT${sign}${absHour}:${String(minute).padStart(2, "0")}`;
+  } catch {
+    return "GMT+0";
+  }
 }
 
 export function createSummaryMessage(
@@ -234,11 +268,12 @@ export function createSummaryMessage(
     `*${title}*`,
     "",
     `*Host:* ${hostName}`,
-    `*When:* ${formatEventDate(event.startAt, timezone)}`,
+    `📅 ${formatEventDate(event.startAt, timezone)}`,
   ];
 
   if (locationName) {
-    lines.push(`*Where:* ${locationName}`);
+    const locationEmoji = locationType === "online" ? "💻" : "📍";
+    lines.push(`${locationEmoji} ${locationName}`);
   }
 
   lines.push("");
