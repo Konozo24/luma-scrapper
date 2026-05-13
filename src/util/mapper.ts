@@ -149,6 +149,17 @@ export function mapGdgDataToApify(
         ? "hybrid"
         : "offline";
 
+  const venueParts = [
+    entry.venue_name,
+    entry.venue_address,
+    entry.venue_city,
+    entry.venue_state,
+    entry.venue_zip_code,
+  ]
+    .map((value: unknown) => String(value || "").trim())
+    .filter((value) => value.length > 0);
+  const venueFullAddress = venueParts.length > 0 ? venueParts.join(", ") : null;
+
   return {
     id: `gdg-${entry.id}`,
     dedupKey: buildGdgDedupKey({
@@ -171,10 +182,10 @@ export function mapGdgDataToApify(
 
     location: {
       locationType: gdgLocationType,
-      fullAddress: null,
-      address: null,
-      city: null,
-      region: null,
+      fullAddress: venueFullAddress,
+      address: entry.venue_address || null,
+      city: entry.venue_city || null,
+      region: entry.venue_state || null,
       country: "Malaysia",
       latitude: null,
       longitude: null,

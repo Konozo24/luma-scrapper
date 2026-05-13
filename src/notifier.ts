@@ -252,7 +252,7 @@ export function createSummaryMessage(
   const hostName =
     event.organizer?.name?.trim() || event.target_profile || "Unknown Host";
   const locationType = (event.location?.locationType || "").toLowerCase();
-  const locationName =
+  const baseLocationName =
     event.location?.fullAddress ||
     event.location?.city ||
     (locationType === "online"
@@ -262,6 +262,13 @@ export function createSummaryMessage(
         : locationType === "offline"
           ? "Venue TBA"
           : null);
+  const hasStructuredVenue = Boolean(
+    event.location?.fullAddress || event.location?.city,
+  );
+  const locationName =
+    locationType === "hybrid" && hasStructuredVenue && baseLocationName
+      ? `${baseLocationName} (Hybrid)`
+      : baseLocationName;
   const registerLink = event.eventUrl || "Link not available";
 
   const lines = [

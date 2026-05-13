@@ -7,6 +7,14 @@ const CHAPTER_ID_MAP: Record<string, string> = {
     "2871",
 };
 
+export function extractGdgEventSlugFromUrl(
+  url: string | null | undefined,
+): string | null {
+  if (!url) return null;
+  const match = url.match(/\/events\/details\/([^/?#]+)\/?$/i);
+  return match?.[1] || null;
+}
+
 export async function scrapeGdgAPI(
   gdgUrl: string,
   friendlyName: string,
@@ -40,7 +48,27 @@ export async function scrapeGdgAPI(
 
     const apiData = await apiRes.json();
     const results = apiData.results || [];
-    return results.map((entry: any) => mapGdgDataToApify(entry, friendlyName));
+    const enrichedResults = await Promise.all(
+      results.map(async (entry: any) => {
+        const slug = extractGdgEventSlugFromUrl(entry?.url);
+        if (!slug) return entry;
+        const detailUrl = `https://gdg.community.dev/api/event_slim/${slug}/`;
+        try {
+          const detailRes = await fetch(detailUrl, {
+            headers: { Accept: "application/json" },
+          });
+          if (!detailRes.ok) return entry;
+          const detail = await detailRes.json();
+          return { ...entry, ...detail };
+        } catch {
+          return entry;
+        }
+      }),
+    );
+
+    return enrichedResults.map((entry: any) =>
+      mapGdgDataToApify(entry, friendlyName),
+    );
   } catch (error) {
     console.error(`❌ Failed to scrape GDG ${friendlyName}:`, error);
     return [];
