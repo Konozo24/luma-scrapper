@@ -79,3 +79,12 @@ export interface ApifyLumaEvent {
   popularityScore: number | null;
   scrapedAt: string;
 }
+
+export type LumaScrapeStatus = "success" | "rate_limited" | "failed";
+
+export interface LumaScrapeResult {
+  status: LumaScrapeStatus;
+  events: ApifyLumaEvent[];
+  source: "api";
+  reason?: string;
+}
