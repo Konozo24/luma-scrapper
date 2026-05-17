@@ -1,6 +1,45 @@
 import { ApifyLumaEvent } from '../type';
 import { mapLumaDataToApify } from '../util/mapper';
 
+const MAX_RETRIES = 5;
+const BASE_BACKOFF_MS = 1500;
+const PAGE_DELAY_MS = 1000;
+
+function sleep(ms: number) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(response: Response, attempt: number) {
+    const retryAfter = response.headers.get("retry-after");
+    if (retryAfter) {
+        const seconds = Number(retryAfter);
+        if (!Number.isNaN(seconds) && seconds > 0) return seconds * 1000;
+    }
+
+    // Exponential backoff + jitter to avoid synchronized retry storms.
+    const exponential = BASE_BACKOFF_MS * (2 ** attempt);
+    const jitter = Math.floor(Math.random() * 500);
+    return exponential + jitter;
+}
+
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        const response = await fetch(url, init);
+        if (response.ok) return response;
+
+        if (response.status === 429 && attempt < MAX_RETRIES) {
+            const delay = getRetryDelayMs(response, attempt);
+            console.warn(`Rate limited (429). Retrying in ${delay}ms (attempt ${attempt + 1}/${MAX_RETRIES})...`);
+            await sleep(delay);
+            continue;
+        }
+
+        throw new Error(`HTTP ${response.status}`);
+    }
+
+    throw new Error("HTTP 429");
+}
+
 export async function scrapeCalendarAPI(calendarId: string): Promise<ApifyLumaEvent[]> {
     console.log(`Fetching API for calendar: ${calendarId}...`);
     
@@ -13,14 +52,12 @@ export async function scrapeCalendarAPI(calendarId: string): Promise<ApifyLumaEv
             const baseUrl = `https://api2.luma.com/calendar/get-items?calendar_api_id=${calendarId}&pagination_limit=50&period=future`;
             const apiUrl = cursor ? `${baseUrl}&pagination_cursor=${cursor}` : baseUrl;
             
-            const response = await fetch(apiUrl, {
+            const response = await fetchWithRetry(apiUrl, {
                 headers: { 
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
                     "Accept": "application/json"
                 }
             });
-
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
             const data = await response.json();
             if (data.entries && data.entries.length > 0) {
@@ -32,7 +69,7 @@ export async function scrapeCalendarAPI(calendarId: string): Promise<ApifyLumaEv
 
             if (hasMore) {
                 console.log(`Fetching next page...`);
-                await new Promise(res => setTimeout(res, 500)); 
+                await sleep(PAGE_DELAY_MS);
             }
         }
 
