@@ -48,13 +48,19 @@ export function mapLumaDataToApify(entry: any): ApifyLumaEvent {
   const evt = entry.event;
   const tix = entry.ticket_info;
   const cal = entry.calendar;
+  const categories = Array.isArray(entry.categories)
+    ? entry.categories
+        .map((category: any) => String(category?.name || category?.slug || category || '').trim())
+        .filter((value: string) => value.length > 0)
+    : [];
 
   return {
     id: evt.api_id,
     dedupKey: buildLumaDedupKey(evt.api_id),
     target_profile: cal?.name,
     eventUrl: formatLumaUrl(evt.url),
-    category: null,
+    category: categories[0] || null,
+    categories: categories.length > 0 ? categories : null,
     name: evt.name,
     description: null,
     eventType: evt.event_type || "independent",
@@ -170,6 +176,7 @@ export function mapGdgDataToApify(
     eventUrl: entry.static_url || entry.url || null,
 
     category: entry.audience_type || null, // E.g., 'HYBRID' or 'VIRTUAL'
+    categories: null,
     name: entry.title,
     description: entry.description_short || null,
     eventType: "gdg_event",

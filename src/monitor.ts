@@ -5,7 +5,7 @@ import { upsertEvents } from './service/storage';
 import { sendEventSummaries } from './notifier';
 import { ApifyLumaEvent } from './type';
 import { getDedupKeyFromEvent } from './util/dedup';
-import { isEventFromTargetCountry } from './util/filter';
+import { isEventFromTargetCountry, isTechRelatedEvent } from './util/filter';
 
 const CALENDAR_NAMES: Record<string, string> = {
   'cal-DqBTiRhIzzmBhcU': 'AI.SEA',
@@ -18,6 +18,8 @@ const CALENDAR_NAMES: Record<string, string> = {
 const DISCOVER_PLACE_NAMES: Record<string, string> = {
   'discplace-O15L1VZiYe0GYGm': 'Kuala Lumpur',
 };
+
+const KL_SOURCE_NAMES = new Set(['Kuala Lumpur']);
 
 const LUMA_COOLDOWN_MINUTES = Number(process.env.LUMA_COOLDOWN_MINUTES ?? 45);
 const LUMA_RATE_LIMIT_THRESHOLD = Number(process.env.LUMA_RATE_LIMIT_THRESHOLD ?? 1);
@@ -236,10 +238,6 @@ export async function checkForNewEvents() {
       discoverFetchedCount += labeledEvents.length;
       allLiveEvents.push(...labeledEvents);
 
-      console.log(
-        `discover_place=${placeId} place_name="${placeName}" source=discover status=success events=${labeledEvents.length}`,
-      );
-
       await sleep(1000);
     }
 
@@ -258,11 +256,28 @@ export async function checkForNewEvents() {
       }
       return isTargetCountry;
     });
+    const techFilteredEvents = countryFilteredEvents.filter((event) => {
+      if (!KL_SOURCE_NAMES.has(event.target_profile)) return true;
+
+      const isTechEvent = isTechRelatedEvent(event);
+      if (!isTechEvent) {
+        const categories = [event.category, ...(event.categories ?? [])]
+          .filter((value): value is string => Boolean(value))
+          .join(', ') || 'none';
+
+        console.log(
+          `Tech filter: Excluding event "${event.name}" categories=${categories} (${event.target_profile})`,
+        );
+      }
+
+      return isTechEvent;
+    });
     const countryFilteredCount = allLiveEvents.length - countryFilteredEvents.length;
+    const techFilteredCount = countryFilteredEvents.length - techFilteredEvents.length;
 
     // Deduplicate events by event ID
     const dedupMap = new Map<string, ApifyLumaEvent>();
-    for (const event of countryFilteredEvents) {
+    for (const event of techFilteredEvents) {
       const dedupKey = getDedupKeyFromEvent(event);
       if (!dedupMap.has(dedupKey)) {
         dedupMap.set(dedupKey, event);
@@ -271,10 +286,10 @@ export async function checkForNewEvents() {
       }
     }
     const dedupedEvents = Array.from(dedupMap.values());
-    const duplicatesFiltered = countryFilteredEvents.length - dedupedEvents.length;
+    const duplicatesFiltered = techFilteredEvents.length - dedupedEvents.length;
 
     console.log(
-      `Run summary: total_fetched=${dedupedEvents.length} (country_filtered=${countryFilteredCount} dedup_removed=${duplicatesFiltered}) luma_fetched=${lumaFetchedCount} discover_fetched=${discoverFetchedCount} gdg_fetched=${gdgFetchedCount} cooldown_skipped=${cooldownSkippedCount} cooling_down_calendars=${coolingDownCalendars} cooling_down_places=${coolingDownPlaces}`,
+      `Run summary: total_fetched=${dedupedEvents.length} (country_filtered=${countryFilteredCount} tech_filtered=${techFilteredCount} dedup_removed=${duplicatesFiltered}) luma_fetched=${lumaFetchedCount} discover_fetched=${discoverFetchedCount} gdg_fetched=${gdgFetchedCount} cooldown_skipped=${cooldownSkippedCount} cooling_down_calendars=${coolingDownCalendars} cooling_down_places=${coolingDownPlaces}`,
     );
 
     if (dedupedEvents.length === 0) {

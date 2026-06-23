@@ -34,6 +34,7 @@ export interface ApifyLumaEvent {
   target_profile: string;
   eventUrl: string | null;
   category: string | null;
+  categories: string[] | null;
   name: string;
   description: string | null;
   eventType: string;

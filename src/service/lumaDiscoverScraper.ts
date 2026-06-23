@@ -40,6 +40,19 @@ async function fetchWithRetry(url: string, init: RequestInit): Promise<Response>
   throw new Error('HTTP 429');
 }
 
+async function fetchEventDetail(eventApiId: string): Promise<any | null> {
+  const url = `https://api.luma.com/event/get?event_api_id=${eventApiId}`;
+
+  const response = await fetchWithRetry(url, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      Accept: 'application/json',
+    },
+  });
+
+  return response.json();
+}
+
 export async function scrapeDiscoverAPI(placeId: string): Promise<LumaScrapeResult> {
   console.log(`Fetching Discover API for place: ${placeId}...`);
 
@@ -73,10 +86,29 @@ export async function scrapeDiscoverAPI(placeId: string): Promise<LumaScrapeResu
       }
     }
 
+    const enrichedEntries = await Promise.all(
+      allRawEntries.map(async (entry) => {
+        const eventApiId = entry?.event?.api_id;
+        if (!eventApiId) return entry;
+
+        try {
+          const detail = await fetchEventDetail(eventApiId);
+          return {
+            ...entry,
+            categories: detail?.categories || [],
+            event_detail: detail,
+          };
+        } catch (error) {
+          console.error(`Failed to fetch event detail for ${eventApiId}:`, error);
+          return entry;
+        }
+      }),
+    );
+
     return {
       status: 'success',
       source: 'discover',
-      events: allRawEntries.map((entry) => mapLumaDataToApify(entry)),
+      events: enrichedEntries.map((entry) => mapLumaDataToApify(entry)),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
