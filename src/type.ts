@@ -85,6 +85,6 @@ export type LumaScrapeStatus = "success" | "rate_limited" | "failed";
 export interface LumaScrapeResult {
   status: LumaScrapeStatus;
   events: ApifyLumaEvent[];
-  source: "api";
+  source: "api" | "discover";
   reason?: string;
 }
