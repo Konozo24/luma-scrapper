@@ -12,7 +12,6 @@ const CALENDAR_NAMES: Record<string, string> = {
   'cal-DjCdUOevQOyB5OS': 'AI Hackerdom',
   'cal-HRPtK7hDvVSLaNu': 'Nyala Labs',
   'cal-AQNeOLktkou1BBv': 'Testing',
-  'cal-6iIeDGNQ7vK8cfx': 'Lorong AI',
   'https://gdg.community.dev/gdg-on-campus-universiti-teknologi-malaysia-johor-bahru-malaysia/': 'GDG UTM',
 };
 
