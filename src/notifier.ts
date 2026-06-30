@@ -287,7 +287,7 @@ export function createSummaryMessage(
   lines.push(`🔗 *Register Here:* ${registerLink}`);
 
   lines.push("");
-  lines.push("- Nyalalabs");
+  lines.push("— Nyalalabs");
 
   return lines.join("\n");
 }
