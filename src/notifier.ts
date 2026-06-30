@@ -286,6 +286,9 @@ export function createSummaryMessage(
   lines.push("");
   lines.push(`🔗 *Register Here:* ${registerLink}`);
 
+  lines.push("");
+  lines.push("- Nyalalabs");
+
   return lines.join("\n");
 }
 
