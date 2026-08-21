@@ -4,6 +4,8 @@ import { mapLumaDataToApify } from '../util/mapper';
 const MAX_RETRIES = 5;
 const BASE_BACKOFF_MS = 1500;
 const PAGE_DELAY_MS = 1000;
+const DETAIL_CONCURRENCY = 4;
+const DETAIL_BATCH_DELAY_MS = 400;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -86,24 +88,47 @@ export async function scrapeDiscoverAPI(placeId: string): Promise<LumaScrapeResu
       }
     }
 
-    const enrichedEntries = await Promise.all(
-      allRawEntries.map(async (entry) => {
-        const eventApiId = entry?.event?.api_id;
-        if (!eventApiId) return entry;
+    // Detail fetches carry the event categories used by the tech filter. Firing
+    // them all at once gets us rate limited, the categories come back empty, and
+    // non-tech events slip through the keyword fallback - so batch them.
+    const enrichedEntries: any[] = [];
+    for (let i = 0; i < allRawEntries.length; i += DETAIL_CONCURRENCY) {
+      const batch = allRawEntries.slice(i, i + DETAIL_CONCURRENCY);
 
-        try {
-          const detail = await fetchEventDetail(eventApiId);
-          return {
-            ...entry,
-            categories: detail?.categories || [],
-            event_detail: detail,
-          };
-        } catch (error) {
-          console.error(`Failed to fetch event detail for ${eventApiId}:`, error);
-          return entry;
-        }
-      }),
-    );
+      const enrichedBatch = await Promise.all(
+        batch.map(async (entry) => {
+          const eventApiId = entry?.event?.api_id;
+          if (!eventApiId) return entry;
+
+          try {
+            const detail = await fetchEventDetail(eventApiId);
+            return {
+              ...entry,
+              categories: detail?.categories || [],
+              event_detail: detail,
+            };
+          } catch (error) {
+            console.error(`Failed to fetch event detail for ${eventApiId}:`, error);
+            return entry;
+          }
+        }),
+      );
+
+      enrichedEntries.push(...enrichedBatch);
+
+      if (i + DETAIL_CONCURRENCY < allRawEntries.length) {
+        await sleep(DETAIL_BATCH_DELAY_MS);
+      }
+    }
+
+    const missingCategories = enrichedEntries.filter(
+      (entry) => !Array.isArray(entry?.categories) || entry.categories.length === 0,
+    ).length;
+    if (missingCategories > 0) {
+      console.warn(
+        `Discover place ${placeId}: ${missingCategories}/${enrichedEntries.length} events have no categories (tech filter falls back to keywords).`,
+      );
+    }
 
     return {
       status: 'success',
