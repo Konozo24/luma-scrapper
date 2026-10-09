@@ -416,6 +416,11 @@ export async function sendEventSummary(event: ApifyLumaEvent): Promise<void> {
 export async function sendEventSummaries(
   events: ApifyLumaEvent[],
 ): Promise<{ sent: number; failed: number }> {
+  if (!GROUP_JID) {
+    console.warn("GROUP_JID is not configured. Skipping WhatsApp notifications.");
+    return { sent: 0, failed: 0 };
+  }
+
   const pendingEvents = await loadPending(50);
   const merged = [...pendingEvents, ...events];
   if (merged.length === 0) return { sent: 0, failed: 0 };
