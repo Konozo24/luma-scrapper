@@ -17,7 +17,7 @@ const LINKEDIN_USERNAME = normalizeEnv(process.env.LINKEDIN_USERNAME);
 const LINKEDIN_PASSWORD = normalizeEnv(process.env.LINKEDIN_PASSWORD);
 const LINKEDIN_PUBLIC_ID =
   normalizeEnv(process.env.LINKEDIN_PUBLIC_ID) || "nyalalabs";
-const LINKEDIN_POST_COUNT = Number(process.env.LINKEDIN_POST_COUNT || "10");
+const LINKEDIN_POST_COUNT = 10;
 
 export interface LinkedInPostDocument {
   dedupKey: string;
@@ -263,7 +263,7 @@ import os
 api = Linkedin(os.environ['LINKEDIN_USERNAME'], os.environ['LINKEDIN_PASSWORD'], authenticate=True)
 posts = api.get_company_updates(
     public_id=os.environ.get('LINKEDIN_PUBLIC_ID', 'nyalalabs'),
-    max_results=int(os.environ.get('LINKEDIN_POST_COUNT', '10')),
+    max_results=${LINKEDIN_POST_COUNT},
 )
 print(json.dumps(posts))
 `;
@@ -274,7 +274,6 @@ print(json.dumps(posts))
       LINKEDIN_USERNAME,
       LINKEDIN_PASSWORD,
       LINKEDIN_PUBLIC_ID,
-      LINKEDIN_POST_COUNT: String(LINKEDIN_POST_COUNT),
     },
     encoding: "utf-8",
   });
