@@ -377,7 +377,7 @@ print(json.dumps(posts))
 export async function scrapeNyalaLinkedInPosts(): Promise<LinkedInScrapeSummary> {
   const posts = (await getLinkedInPostsFromPython()).filter(
     (post) => !isLinkedInRepost(post),
-  );
+  ).slice(0, LINKEDIN_POST_COUNT);
   const normalizedPosts = posts.map((post) => normalizeLinkedInPost(post, LINKEDIN_PUBLIC_ID));
   const client = new MongoClient(MONGO_URI);
 
