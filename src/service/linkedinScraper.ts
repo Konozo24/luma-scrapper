@@ -62,6 +62,44 @@ function getPostId(post: LinkedInRawPost): string | null {
   return candidate ? String(candidate) : null;
 }
 
+function hasRepostMarker(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+
+  for (const [key, nestedValue] of Object.entries(
+    value as Record<string, unknown>,
+  )) {
+    const normalizedKey = key.toLowerCase();
+    const isRepostKey =
+      /^(?:is)?(?:repost|reshare|reposted|reshared)$/.test(normalizedKey) ||
+      /^(?:reposted|reshared)(?:update|post)$/.test(normalizedKey) ||
+      normalizedKey === "originalupdate" ||
+      normalizedKey.includes("repost") ||
+      normalizedKey.includes("reshare");
+
+    if (isRepostKey && nestedValue) return true;
+    if (hasRepostMarker(nestedValue)) return true;
+  }
+
+  return false;
+}
+
+export function isLinkedInRepost(post: LinkedInRawPost): boolean {
+  if (hasRepostMarker(post)) return true;
+
+  const updateTypeCandidates = [
+    post?.type,
+    post?.postType,
+    post?.updateType,
+    post?.updateMetadata?.type,
+  ];
+
+  return updateTypeCandidates.some(
+    (value) =>
+      typeof value === "string" &&
+      /^(?:repost|reshare|reposted|reshared)$/i.test(value.trim()),
+  );
+}
+
 function getPostText(post: LinkedInRawPost): string | null {
   const update = post?.value?.["com.linkedin.voyager.feed.render.UpdateV2"];
   const textCandidates = [
@@ -309,7 +347,9 @@ print(json.dumps(posts))
 }
 
 export async function scrapeNyalaLinkedInPosts(): Promise<LinkedInScrapeSummary> {
-  const posts = await getLinkedInPostsFromPython();
+  const posts = (await getLinkedInPostsFromPython()).filter(
+    (post) => !isLinkedInRepost(post),
+  );
   const normalizedPosts = posts.map((post) => normalizeLinkedInPost(post, LINKEDIN_PUBLIC_ID));
   const client = new MongoClient(MONGO_URI);
 
