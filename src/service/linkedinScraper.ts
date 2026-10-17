@@ -1,4 +1,5 @@
 import { spawnSync } from "child_process";
+import { createHash } from "crypto";
 import { MongoClient } from "mongodb";
 
 type LinkedInRawPost = Record<string, any>;
@@ -27,6 +28,7 @@ export interface LinkedInPostDocument {
   source: "linkedin";
   postId: string | null;
   postUrn: string | null;
+  contentDedupKey: string | null;
   text: string | null;
   url: string | null;
   firstImageUrl: string | null;
@@ -128,6 +130,22 @@ function getPostText(post: LinkedInRawPost): string | null {
   }
 
   return null;
+}
+
+function normalizePostText(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+export function buildContentDedupKey(text: string | null): string | null {
+  if (!text) return null;
+
+  const normalizedText = normalizePostText(text);
+  if (!normalizedText) return null;
+
+  const hash = createHash("sha256")
+    .update(normalizedText, "utf8")
+    .digest("hex");
+  return `linkedin:text:${hash}`;
 }
 
 function getPostUrl(post: LinkedInRawPost): string | null {
@@ -267,7 +285,11 @@ function normalizeLinkedInPost(
   profileId: string,
 ): LinkedInPostDocument {
   const postId = getPostId(post);
-  const dedupKey = buildDedupKey(post, postId || `${profileId}-${Date.now()}`);
+  const text = getPostText(post);
+  const contentDedupKey = buildContentDedupKey(text);
+  const dedupKey =
+    contentDedupKey ||
+    buildDedupKey(post, postId || `${profileId}-${Date.now()}`);
   const imageUrls = getPostImageUrls(post);
 
   return {
@@ -276,7 +298,8 @@ function normalizeLinkedInPost(
     source: "linkedin",
     postId: postId || null,
     postUrn: post?.urn || post?.entityUrn || post?.objectUrn || post?.updateMetadata?.urn || null,
-    text: getPostText(post),
+    contentDedupKey,
+    text,
     url: getPostUrl(post),
     firstImageUrl: imageUrls[0] || null,
     imageUrls,
@@ -378,7 +401,13 @@ export async function scrapeNyalaLinkedInPosts(): Promise<LinkedInScrapeSummary>
   const posts = (await getLinkedInPostsFromPython()).filter(
     (post) => !isLinkedInRepost(post),
   ).slice(0, LINKEDIN_POST_COUNT);
-  const normalizedPosts = posts.map((post) => normalizeLinkedInPost(post, LINKEDIN_PUBLIC_ID));
+  const normalizedPosts = [
+    ...new Map(
+      posts
+        .map((post) => normalizeLinkedInPost(post, LINKEDIN_PUBLIC_ID))
+        .map((post) => [post.dedupKey, post] as const),
+    ).values(),
+  ];
   const client = new MongoClient(MONGO_URI);
 
   try {
@@ -387,10 +416,24 @@ export async function scrapeNyalaLinkedInPosts(): Promise<LinkedInScrapeSummary>
       .db(LINKEDIN_DB_NAME)
       .collection<LinkedInPostDocument>(LINKEDIN_COLLECTION);
     await collection.createIndex({ dedupKey: 1 }, { unique: true, sparse: true, name: "uniq_linkedin_dedup_key" });
+    await collection.createIndex(
+      { contentDedupKey: 1 },
+      { unique: true, sparse: true, name: "uniq_linkedin_content_dedup_key" },
+    );
 
     const ops = normalizedPosts.map((post) => ({
       updateOne: {
-        filter: { dedupKey: post.dedupKey },
+        filter: {
+          $or: [
+            { dedupKey: post.dedupKey },
+            ...(post.contentDedupKey
+              ? [
+                  { contentDedupKey: post.contentDedupKey },
+                  { text: post.text },
+                ]
+              : []),
+          ],
+        },
         update: { $set: post },
         upsert: true,
       },
