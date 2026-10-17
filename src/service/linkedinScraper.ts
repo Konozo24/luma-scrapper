@@ -15,6 +15,8 @@ const LINKEDIN_COLLECTION =
   normalizeEnv(process.env.LINKEDIN_POSTS_COLLECTION) || "linkedin_posts";
 const LINKEDIN_USERNAME = normalizeEnv(process.env.LINKEDIN_USERNAME);
 const LINKEDIN_PASSWORD = normalizeEnv(process.env.LINKEDIN_PASSWORD);
+const LINKEDIN_LI_AT = normalizeEnv(process.env.LINKEDIN_LI_AT);
+const LINKEDIN_JSESSIONID = normalizeEnv(process.env.LINKEDIN_JSESSIONID);
 const LINKEDIN_PUBLIC_ID =
   normalizeEnv(process.env.LINKEDIN_PUBLIC_ID) || "nyalalabs";
 const LINKEDIN_POST_COUNT = 10;
@@ -285,8 +287,13 @@ function normalizeLinkedInPost(
 }
 
 async function getLinkedInPostsFromPython(): Promise<LinkedInRawPost[]> {
-  if (!LINKEDIN_USERNAME || !LINKEDIN_PASSWORD) {
-    throw new Error("Missing LINKEDIN_USERNAME or LINKEDIN_PASSWORD in environment.");
+  if (
+    (!LINKEDIN_USERNAME || !LINKEDIN_PASSWORD) &&
+    !LINKEDIN_LI_AT
+  ) {
+    throw new Error(
+      "Configure LINKEDIN_LI_AT or both LINKEDIN_USERNAME and LINKEDIN_PASSWORD.",
+    );
   }
 
   if (!MONGO_URI) {
@@ -294,11 +301,30 @@ async function getLinkedInPostsFromPython(): Promise<LinkedInRawPost[]> {
   }
 
   const script = `
-from linkedin_api import Linkedin
+from open_linkedin_api import Linkedin
 import json
 import os
+from requests.cookies import RequestsCookieJar
 
-api = Linkedin(os.environ['LINKEDIN_USERNAME'], os.environ['LINKEDIN_PASSWORD'], authenticate=True)
+li_at = os.environ.get('LINKEDIN_LI_AT', '').strip()
+if li_at:
+    cookies = RequestsCookieJar()
+    cookies.set('li_at', li_at, domain='www.linkedin.com')
+    jsessionid = os.environ.get('LINKEDIN_JSESSIONID', '').strip()
+    if jsessionid:
+        cookies.set('JSESSIONID', jsessionid, domain='www.linkedin.com')
+    api = Linkedin(
+        os.environ.get('LINKEDIN_USERNAME', ''),
+        '',
+        authenticate=True,
+        cookies=cookies,
+    )
+else:
+    api = Linkedin(
+        os.environ['LINKEDIN_USERNAME'],
+        os.environ['LINKEDIN_PASSWORD'],
+        authenticate=True,
+    )
 posts = api.get_company_updates(
     public_id=os.environ.get('LINKEDIN_PUBLIC_ID', 'nyalalabs'),
     max_results=${LINKEDIN_POST_COUNT},
@@ -311,6 +337,8 @@ print(json.dumps(posts))
       ...process.env,
       LINKEDIN_USERNAME,
       LINKEDIN_PASSWORD,
+      LINKEDIN_LI_AT,
+      LINKEDIN_JSESSIONID,
       LINKEDIN_PUBLIC_ID,
     },
     encoding: "utf-8",
